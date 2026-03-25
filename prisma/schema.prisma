@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USER ────────────────────────────────────────────────
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  password      String?   // For email/password auth
+  image         String?
+  bio           String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  posts         Post[]
+  likes         Like[]
+  savedWords    SavedWord[]
+  comments      Comment[]
+  stats         UserStats?
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// ─── OAUTH ───────────────────────────────────────────────
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+// ─── WORD OF THE DAY ─────────────────────────────────────
+model WordOfDay {
+  id          String     @id @default(cuid())
+  word        String     @unique
+  definition  String
+  urduMeaning String?
+  example     String
+  dayIndex    Int        @unique
+  difficulty  Difficulty @default(INTERMEDIATE)
+  createdAt   DateTime   @default(now())
+
+  savedBy     SavedWord[]
+
+  @@index([dayIndex])
+  @@map("word_of_day")
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+// ─── COMMUNITY POSTS ─────────────────────────────────────
+model Post {
+  id          String   @id @default(cuid())
+  word        String
+  definition  String
+  urduMeaning String?
+  example     String?
+  likesCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes       Like[]
+  comments    Comment[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+// ─── LIKES ───────────────────────────────────────────────
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("likes")
+}
+
+// ─── COMMENTS ────────────────────────────────────────────
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("comments")
+}
+
+// ─── SAVED WORDS ─────────────────────────────────────────
+model SavedWord {
+  id          String    @id @default(cuid())
+  userId      String
+  wordOfDayId String?
+  createdAt   DateTime  @default(now())
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wordOfDay   WordOfDay? @relation(fields: [wordOfDayId], references: [id])
+
+  @@unique([userId, wordOfDayId])
+  @@map("saved_words")
+}
+
+// ─── USER STATS ──────────────────────────────────────────
+model UserStats {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  totalXP        Int       @default(0)
+  level          Int       @default(1)
+  currentStreak  Int       @default(0)
+  longestStreak  Int       @default(0)
+  lastActiveDate DateTime?
+  wordsLearned   Int       @default(0)
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_stats")
+}
+
+// session 
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+

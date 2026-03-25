@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: sans-serif;
+    background-color: #0F0F0F;
+    color: #F5F5F5;
+  }
+  h1 { @apply text-4xl font-bold; }
+  h2 { @apply text-2xl font-semibold; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 bg-indigo-600 text-white hover:bg-indigo-700;
+  }
+  .btn-ghost {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 border border-zinc-700 text-zinc-100 hover:border-indigo-600 hover:text-indigo-400;
+  }
+  .btn-secondary {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 bg-zinc-700 text-white hover:bg-zinc-600;
+  }
+  .card {
+    @apply bg-zinc-900 rounded-lg border border-zinc-800;
+  }
+  .input-field {
+    @apply w-full px-4 py-2 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 transition-all;
+  }
+  .feature-card {
+    @apply bg-zinc-900 rounded-lg border border-zinc-800 p-6 transition-all duration-300 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10;
+  }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fadeUp 0.6s ease-out forwards;
+  }
+  .animate-fade-up-delay {
+    animation: fadeUp 0.6s ease-out 0.2s forwards;
+    opacity: 0;
+  }
+  .animate-fade-up-delay-2 {
+    animation: fadeUp 0.6s ease-out 0.4s forwards;
+    opacity: 0;
+  }
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
