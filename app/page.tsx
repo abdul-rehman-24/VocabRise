@@ -1,264 +1,449 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState, useRef } from 'react'
+import Navbar from '@/app/components/shared/Navbar'
+import { Trophy, Book, GraduationCap, Flame, Star, Sparkles, Zap, ArrowRight, Play, CheckCircle2 } from 'lucide-react'
 
-export default function Home() {
+export default function LandingPage() {
+  const { data: session } = useSession()
   const router = useRouter()
-  const [word, setWord] = useState<{
-    id: string
-    word: string
-    definition: string
-    urduMeaning: string | null
-    example: string
-    dayIndex: number
-    difficulty: string
-    createdAt: string
-  } | null>(null)
-  const [loading, setLoading] = useState(true)
+  
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [typedText, setTypedText] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [loopNum, setLoopNum] = useState(0)
+  const [typingSpeed, setTypingSpeed] = useState(150)
+  
+  const statsRef = useRef<HTMLDivElement>(null)
+  const [statsVisible, setStatsVisible] = useState(false)
+  const [countUsers, setCountUsers] = useState(0)
+  const [countWords, setCountWords] = useState(0)
+  const [countQuizzes, setCountQuizzes] = useState(0)
 
+  const phrases = ["Level up your English", "Master new vocabulary", "Win Word Battles", "Speak with confidence"]
+
+  // Live Typing Effect
   useEffect(() => {
-    fetch('/api/word-of-day')
-      .then(res => res.json())
-      .then(data => {
-        setWord(data)
-        setLoading(false)
+    let timer: NodeJS.Timeout
+    const handleType = () => {
+      const i = loopNum % phrases.length
+      const fullText = phrases[i]
+
+      setTypedText(isDeleting ? fullText.substring(0, typedText.length - 1) : fullText.substring(0, typedText.length + 1))
+
+      setTypingSpeed(isDeleting ? 30 : 100)
+
+      if (!isDeleting && typedText === fullText) {
+        timer = setTimeout(() => setIsDeleting(true), 2000)
+      } else if (isDeleting && typedText === '') {
+        setIsDeleting(false)
+        setLoopNum(loopNum + 1)
+      } else {
+        timer = setTimeout(handleType, typingSpeed)
+      }
+    }
+
+    timer = setTimeout(handleType, typingSpeed)
+    return () => clearTimeout(timer)
+  }, [typedText, isDeleting, loopNum, phrases, typingSpeed])
+
+  // Scroll Progress & Intersection Observer
+  useEffect(() => {
+    const handleScroll = () => {
+      const totalScroll = document.documentElement.scrollTop
+      const windowHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight
+      const scroll = `${totalScroll / windowHeight}`
+      setScrollProgress(Number(scroll))
+    }
+    window.addEventListener('scroll', handleScroll)
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('reveal-active')
+          if (entry.target.id === 'stats-section') {
+            setStatsVisible(true)
+          }
+        }
       })
-      .catch(() => setLoading(false))
+    }, { threshold: 0.1 })
+
+    document.querySelectorAll('.reveal-on-scroll').forEach((el) => observer.observe(el))
+    if (statsRef.current) observer.observe(statsRef.current)
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      observer.disconnect()
+    }
   }, [])
 
+  // Count up animation
+  useEffect(() => {
+    if (statsVisible) {
+      const duration = 2000
+      const steps = 60
+      const stepTime = duration / steps
+      
+      let currentStep = 0
+      const timer = setInterval(() => {
+        currentStep++
+        const progress = currentStep / steps
+        const easeOutQuad = 1 - (1 - progress) * (1 - progress)
+        
+        setCountUsers(Math.floor(easeOutQuad * 10000))
+        setCountWords(Math.floor(easeOutQuad * 50000))
+        setCountQuizzes(Math.floor(easeOutQuad * 120000))
+        
+        if (currentStep >= steps) clearInterval(timer)
+      }, stepTime)
+      return () => clearInterval(timer)
+    }
+  }, [statsVisible])
+
   return (
-    <main className="min-h-screen bg-[#0F0F0F] text-zinc-100">
-      {/* NAVBAR */}
-      <nav className="sticky top-0 z-50 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">V</span>
-            </div>
-            <span className="text-xl font-bold text-zinc-100 hidden sm:inline hover:text-indigo-400 transition-colors duration-200 cursor-pointer">VocabRise</span>
-          </div>
+    <div className="bg-[var(--bg-primary)] min-h-screen text-white font-body overflow-x-hidden selection:bg-[var(--brand)] selection:text-white relative">
+      <style dangerouslySetInnerHTML={{__html: `
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+        
+        :root {
+          --font-heading: 'Plus Jakarta Sans', sans-serif;
+          --font-body: 'Inter', sans-serif;
+          --bg-primary: #0D0B1A;
+          --brand: #7C3AED;
+          --brand-bright: #A855F7;
+          --pink: #EC4899;
+        }
 
-          {/* Right buttons */}
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push('/auth/signin')} className="border border-zinc-600 text-zinc-200 hover:border-indigo-500 hover:text-indigo-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200">
-              Sign In
-            </button>
-            <button onClick={() => router.push('/auth/signin')} className="btn-primary transition-all duration-200 hover:bg-indigo-500 hover:scale-105 active:scale-95">
-              Get Started
-            </button>
-          </div>
-        </div>
-      </nav>
+        .font-heading { font-family: var(--font-heading); }
+        .font-body { font-family: var(--font-body); }
 
-      {/* HERO SECTION */}
-      <section className="bg-[#0F0F0F] py-24 sm:py-32 relative overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-[120px]" />
-          <div className="absolute top-1/4 right-1/4 w-[300px] h-[300px] rounded-full bg-purple-600/8 blur-[80px]" />
-        </div>
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
-          <h1 className="text-4xl sm:text-6xl font-bold tracking-tight mb-6 text-zinc-100 animate-fade-up">
-            Master English
-            <br />
-            <span className="text-indigo-500">Vocabulary</span>
-            <br />
-            Every Single Day.
-          </h1>
+        /* Scroll Reveal */
+        .reveal-on-scroll {
+          opacity: 0;
+          transform: translateY(40px);
+          transition: all 0.8s cubic-bezier(0.5, 0, 0, 1);
+        }
+        .reveal-active {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        
+        /* Animations */
+        @keyframes float {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-15px) rotate(1deg); }
+        }
+        .animate-float { animation: float 6s ease-in-out infinite; }
 
-          <p className="text-lg sm:text-xl text-zinc-400 mb-8 max-w-2xl mx-auto leading-relaxed animate-fade-up-delay">
-            Join thousands of learners building their vocabulary through community, streaks, and daily challenges.
-          </p>
+        @keyframes neonBorder {
+          0%, 100% { border-color: rgba(124, 58, 237, 0.4); box-shadow: 0 0 20px rgba(124, 58, 237, 0.2); }
+          50% { border-color: rgba(168, 85, 247, 0.8); box-shadow: 0 0 40px rgba(168, 85, 247, 0.6); }
+        }
+        .animate-neon { animation: neonBorder 3s infinite; }
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up-delay-2">
-            <button onClick={() => router.push('/auth/signin')} className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-lg font-medium transition-all duration-200 text-base sm:text-lg">
-              Start Learning Free
-            </button>
-            <button className="border border-zinc-600 text-zinc-200 hover:border-zinc-400 px-8 py-3 rounded-lg font-medium transition-all duration-200 text-base sm:text-lg">
-              See How It Works
-            </button>
-          </div>
-        </div>
-      </section>
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.4); }
+          50% { box-shadow: 0 0 0 15px rgba(168, 85, 247, 0); }
+        }
+        .animate-pulse-glow { animation: pulseGlow 2s infinite; }
 
-      {/* STATS SECTION */}
-      <section className="bg-zinc-900 border-y border-zinc-800 py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-around items-center gap-8 sm:gap-0">
-          <div className="text-center hover:scale-105 transition-transform duration-200 cursor-default">
-            <p className="text-indigo-400 font-bold text-4xl tabular-nums">10,000+</p>
-            <p className="text-sm text-zinc-500 mt-1">Words in library</p>
-          </div>
-          <div className="text-center hover:scale-105 transition-transform duration-200 cursor-default">
-            <p className="text-indigo-400 font-bold text-4xl tabular-nums">5,000+</p>
-            <p className="text-sm text-zinc-500 mt-1">Active learners</p>
-          </div>
-          <div className="text-center hover:scale-105 transition-transform duration-200 cursor-default">
-            <p className="text-indigo-400 font-bold text-4xl tabular-nums">50,000+</p>
-            <p className="text-sm text-zinc-500 mt-1">Quizzes taken</p>
-          </div>
-        </div>
-      </section>
+        @keyframes shimmerSweep {
+          0% { transform: translateX(-100%) skewX(-15deg); }
+          100% { transform: translateX(200%) skewX(-15deg); }
+        }
+        .btn-shimmer::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 50%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+          transform: translateX(-100%) skewX(-15deg);
+          transition: 0.5s;
+        }
+        .btn-shimmer:hover::after {
+          animation: shimmerSweep 0.8s forwards;
+        }
 
-      {/* WORD OF THE DAY CARD */}
-      <section className="bg-[#0F0F0F] py-16 sm:py-20">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-zinc-500 text-sm uppercase tracking-widest text-center mb-4">Featured Today</p>
+        @keyframes soundwave {
+          0% { transform: scaleY(0.3); }
+          100% { transform: scaleY(1.0); }
+        }
+        .soundwave-bar { 
+          width: 3px;
+          height: 18px;
+          background-color: #7C3AED;
+          border-radius: 99px;
+          animation: soundwave 0.6s ease-in-out infinite alternate;
+          transform-origin: center;
+        }
+        .soundwave-bar:nth-child(1) { animation-delay: 0s; }
+        .soundwave-bar:nth-child(2) { animation-delay: 0.2s; }
+        .soundwave-bar:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes testimonialFloat {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+
+        .aurora-bg {
+          background: 
+            radial-gradient(circle at 15% 50%, rgba(124, 58, 237, 0.15) 0%, transparent 50%),
+            radial-gradient(circle at 85% 30%, rgba(236, 72, 153, 0.15) 0%, transparent 50%);
+          filter: blur(60px);
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          animation: aurora 10s ease-in-out infinite alternate;
+        }
+        @keyframes aurora {
+          0% { transform: scale(1) translate(0, 0); }
+          100% { transform: scale(1.1) translate(20px, -20px); }
+        }
+
+        .mesh-grid {
+          background-size: 50px 50px;
+          background-image: linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+                            linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+          mask-image: radial-gradient(circle at center, black, transparent 80%);
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+        }
+      `}} />
+
+      {/* Scroll Progress Bar */}
+      <div className="fixed top-0 left-0 h-1 bg-gradient-to-r from-[var(--brand)] via-[var(--brand-bright)] to-[var(--pink)] z-[200] transition-all duration-100" style={{ width: `${scrollProgress * 100}%` }} />
+
+      <Navbar />
+
+      <main className="relative z-10">
+        
+        {/* HERO SECTION */}
+        <section className="relative min-h-[90vh] flex items-center pt-20 pb-16 overflow-hidden">
+          <div className="aurora-bg"></div>
+          <div className="mesh-grid"></div>
           
-          {loading ? (
-            // Loading skeleton
-            <div className="card border-t-4 border-t-indigo-600 p-8 sm:p-10 shadow-lg shadow-indigo-500/5 animate-pulse">
-              <div className="inline-block mb-6">
-                <div className="h-6 w-32 bg-zinc-800 rounded-full" />
+          <div className="max-w-[1400px] mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative z-10 w-full">
+            <div className="flex flex-col items-center lg:items-start text-center lg:text-left reveal-on-scroll">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[rgba(124,58,237,0.1)] border border-[var(--brand)] text-[var(--brand-bright)] font-semibold text-sm mb-8 shadow-[0_0_20px_rgba(124,58,237,0.2)]">
+                <Sparkles size={16} /> Welcome to the Future of Learning
               </div>
-              <div className="h-16 w-48 bg-zinc-800 rounded-lg mb-6" />
-              <div className="grid sm:grid-cols-2 gap-8 mb-8 pb-8 border-b border-zinc-800">
-                <div>
-                  <div className="h-4 w-32 bg-zinc-800 rounded mb-3" />
-                  <div className="h-20 w-full bg-zinc-800 rounded" />
-                </div>
-                <div>
-                  <div className="h-4 w-32 bg-zinc-800 rounded mb-3" />
-                  <div className="h-20 w-full bg-zinc-800 rounded" />
-                </div>
-              </div>
-              <div className="mb-8">
-                <div className="h-4 w-20 bg-zinc-800 rounded mb-3" />
-                <div className="h-24 w-full bg-zinc-800 rounded" />
-              </div>
-              <div className="h-10 w-32 bg-zinc-800 rounded-lg" />
-            </div>
-          ) : word ? (
-            // Word loaded successfully
-            <div className="card border-t-4 border-t-indigo-600 p-8 sm:p-10 shadow-lg shadow-indigo-500/5 hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300">
-              {/* Badge */}
-              <div className="inline-block mb-6">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-600/10 text-indigo-400 border border-indigo-600/30">
-                  ✨ Word of the Day
+              
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-heading font-black leading-tight mb-6">
+                Don't just learn. <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--brand)] via-[var(--brand-bright)] to-[var(--pink)] min-h-[80px] inline-block">
+                  {typedText}<span className="animate-pulse">|</span>
                 </span>
+              </h1>
+              
+              <p className="text-lg md:text-xl text-gray-400 font-body mb-10 max-w-xl leading-relaxed">
+                Join thousands of warriors conquering the English language. Play fast-paced vocabulary battles, track your mastery, and build a world-class lexicon.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 w-full justify-center lg:justify-start">
+                <button 
+                  onClick={() => router.push(session ? '/dashboard' : '/auth/signup')}
+                  className="btn-shimmer relative overflow-hidden bg-gradient-to-r from-[var(--brand)] to-[var(--pink)] text-white px-8 py-4 rounded-2xl font-bold text-lg hover:scale-105 transition-all shadow-[0_10px_30px_rgba(168,85,247,0.4)] animate-pulse-glow flex items-center justify-center gap-2"
+                >
+                  ENTER THE ARENA <Zap size={20} />
+                </button>
+                <button 
+                  onClick={() => router.push('/feed')}
+                  className="px-8 py-4 rounded-2xl font-bold text-lg border border-gray-700 bg-[rgba(255,255,255,0.02)] hover:bg-[rgba(255,255,255,0.05)] hover:border-gray-500 transition-all flex items-center justify-center gap-2"
+                >
+                  Explore Feed
+                </button>
               </div>
+            </div>
 
-              {/* Word */}
-              <h2 className="text-4xl sm:text-5xl font-bold text-zinc-100 mb-4">
-                {word.word}
-              </h2>
-
-              {/* Meanings */}
-              <div className="grid sm:grid-cols-2 gap-8 mb-8 pb-8 border-b border-zinc-800">
-                <div className="bg-zinc-800/50 rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-                    English Meaning
-                  </h3>
-                  <p className="text-lg text-zinc-100">
-                    {word.definition}
-                  </p>
+            <div className="relative w-full max-w-lg mx-auto lg:mx-0 reveal-on-scroll" style={{ transitionDelay: '0.2s' }}>
+              <div className="absolute inset-0 bg-gradient-to-r from-[var(--brand)] to-[var(--pink)] rounded-3xl blur-[80px] opacity-20 animate-pulse"></div>
+              
+              {/* Floating Game Card */}
+              <div className="animate-float animate-neon bg-[#12102A]/80 backdrop-blur-xl border-2 border-[var(--brand)] rounded-3xl p-6 md:p-8 shadow-[0_0_30px_rgba(124,58,237,0.4)] relative z-10 overflow-hidden transform perspective-1000 rotate-y-[-5deg]">
+                <div className="flex items-center justify-between mb-8 border-b border-gray-800 pb-4">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  </div>
+                  <div className="bg-red-500/10 text-red-500 px-3 py-1 rounded-full text-xs font-bold font-heading">BOSS ROUND</div>
                 </div>
-                <div className="bg-zinc-800/50 rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-                    Urdu Meaning
-                  </h3>
-                  <p className="text-lg text-zinc-100 text-right leading-loose" dir="rtl">
-                    {word.urduMeaning || 'Not available'}
-                  </p>
+
+                <div className="text-center mb-8">
+                  <h3 className="text-4xl font-heading font-black mb-2 text-white">Tenacious</h3>
+                  <p className="text-gray-400 font-medium">Tending to keep a firm hold of something.</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {['Persistent', 'Yielding', 'Weak', 'Fragile'].map((word, i) => (
+                    <div key={word} className={`p-4 rounded-xl text-center font-bold transition-all border ${i === 0 ? 'bg-[var(--brand)]/20 border-[var(--brand)] text-white shadow-[0_0_20px_rgba(124,58,237,0.3)] scale-105' : 'bg-white/5 border-gray-800 text-gray-400'}`}>
+                      {word}
+                    </div>
+                  ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
 
-              {/* Example */}
-              <div className="mb-8">
-                <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-                  Example
-                </h3>
-                <p className="text-base text-zinc-300 italic leading-relaxed bg-zinc-800/30 rounded-xl p-4">
-                  "{word.example}"
-                </p>
+        {/* STATS SECTION */}
+        <section id="stats-section" ref={statsRef} className="pb-24 pt-8 relative z-10 bg-[#0A0815]">
+          <div className="max-w-[1400px] mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="reveal-on-scroll bg-gradient-to-b from-[#7C3AED]/10 to-transparent p-8 rounded-3xl border border-gray-800 backdrop-blur-xl hover:scale-[1.02] hover:border-[#7C3AED]/50 transition-all text-center">
+              <GraduationCap size={40} className="mx-auto text-[#7C3AED] mb-4" />
+              <div className="text-5xl font-heading font-black mb-2">{countUsers.toLocaleString()}+</div>
+              <div className="text-gray-400 font-medium tracking-wide uppercase text-sm">Active Learners</div>
+            </div>
+            <div className="reveal-on-scroll bg-gradient-to-b from-[#3B82F6]/10 to-transparent p-8 rounded-3xl border border-gray-800 backdrop-blur-xl hover:scale-[1.02] hover:border-[#3B82F6]/50 transition-all text-center" style={{ transitionDelay: '0.1s' }}>
+              <Book size={40} className="mx-auto text-[#3B82F6] mb-4" />
+              <div className="text-5xl font-heading font-black mb-2">{countWords.toLocaleString()}+</div>
+              <div className="text-gray-400 font-medium tracking-wide uppercase text-sm">Words Mastered</div>
+            </div>
+            <div className="reveal-on-scroll bg-gradient-to-b from-[#F59E0B]/10 to-transparent p-8 rounded-3xl border border-gray-800 backdrop-blur-xl hover:scale-[1.02] hover:border-[#F59E0B]/50 transition-all text-center" style={{ transitionDelay: '0.2s' }}>
+              <Trophy size={40} className="mx-auto text-[#F59E0B] mb-4" />
+              <div className="text-5xl font-heading font-black mb-2">{countQuizzes.toLocaleString()}+</div>
+              <div className="text-gray-400 font-medium tracking-wide uppercase text-sm">Quizzes Completed</div>
+            </div>
+          </div>
+        </section>
+
+        {/* FEATURED WORD SECTION */}
+        <section className="py-32 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--brand)]/10 via-[#0D0B1A] to-[#0D0B1A] z-0"></div>
+          <div className="max-w-[1400px] mx-auto px-6 relative z-10 flex flex-col lg:flex-row items-center gap-16">
+            <div className="lg:w-1/2 reveal-on-scroll">
+              <h2 className="text-4xl md:text-5xl font-heading font-black mb-6">Discover the Word of the Day</h2>
+              <p className="text-xl text-gray-400 mb-8 leading-relaxed">Expand your vocabulary daily. Listen to native pronunciations, understand deep context, and challenge yourself with interactive exercises.</p>
+              <div className="flex gap-2 mb-8">
+                <div className="w-8 h-2 rounded-full bg-[var(--brand)]"></div>
+                <div className="w-2 h-2 rounded-full bg-gray-700"></div>
+                <div className="w-2 h-2 rounded-full bg-gray-700"></div>
               </div>
-
-              {/* Button */}
-              <button className="w-full sm:w-auto btn-primary px-8 py-3 text-base font-semibold hover:scale-105 active:scale-95 hover:shadow-lg hover:shadow-indigo-500/40 transition-all duration-200">
-                Save to My List
+              <button className="text-[var(--brand-bright)] font-bold flex items-center gap-2 hover:gap-4 transition-all uppercase tracking-wider text-sm">
+                View Full Archive <ArrowRight size={16} />
               </button>
             </div>
-          ) : (
-            // No word available
-            <div className="card border-t-4 border-t-indigo-600 p-8 sm:p-10 text-center">
-              <p className="text-zinc-400">No word available today</p>
-            </div>
-          )}
-        </div>
-      </section>
+            
+            <div className="lg:w-1/2 w-full reveal-on-scroll" style={{ transitionDelay: '0.2s' }}>
+              <div className="bg-[#12102A]/80 backdrop-blur-xl border border-gray-800 rounded-3xl p-8 relative hover:scale-[1.02] hover:border-[var(--brand)] transition-all duration-500 shadow-2xl overflow-hidden">
+                <div className="absolute top-4 right-4 bg-orange-500/20 border border-orange-500/50 text-orange-400 px-3 py-1 rounded-full flex items-center gap-2 font-bold text-sm">
+                  <Flame size={16} className="animate-pulse" /> 12 Day Streak
+                </div>
+                
+                <div className="flex justify-between items-start mb-6 mt-4">
+                  <div>
+                    <span className="bg-[var(--brand)]/20 text-[var(--brand-bright)] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 inline-block">Adjective</span>
+                    <h3 className="text-5xl font-heading font-black mb-2 animate-[scaleUp_0.5s_ease-out]">Serendipity</h3>
+                    <p className="text-gray-500 font-mono text-sm tracking-widest">/ser-uh n-DIP-i-tee/</p>
+                  </div>
+                  <button className="w-14 h-14 rounded-full bg-[var(--brand)] flex items-center justify-center text-white hover:bg-[var(--brand-bright)] hover:scale-110 transition-all shadow-[0_0_20px_rgba(124,58,237,0.5)]">
+                    <Play fill="currentColor" size={24} />
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-[4px] mb-8 bg-gray-900/50 p-4 rounded-xl w-max">
+                  <div className="soundwave-bar"></div>
+                  <div className="soundwave-bar"></div>
+                  <div className="soundwave-bar"></div>
+                  <span className="text-xs text-gray-400 font-bold uppercase tracking-widest ml-3">Listen to Audio</span>
+                </div>
 
-      {/* FEATURES SECTION */}
-      <section className="bg-[#0F0F0F] py-20 border-t border-zinc-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-zinc-100 mb-4">
-              Everything you need to learn faster
-            </h2>
-            <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
-              Designed to help you master vocabulary with powerful features and community support.
+                <p className="text-lg text-gray-300 font-medium mb-6">The occurrence and development of events by chance in a happy or beneficial way.</p>
+                
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4 italic text-gray-400">
+                  "Finding that rare book at a yard sale was pure <strong className="text-[var(--brand-bright)]">serendipity</strong>."
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* TESTIMONIALS SECTION */}
+        <section className="py-24 bg-[#0A0815] relative">
+          <div className="max-w-[1400px] mx-auto px-6">
+            <h2 className="text-4xl md:text-5xl font-heading font-black text-center mb-16 reveal-on-scroll">Loved by Learners Worldwide</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                { name: "Sarah L.", role: "Student, USA", flag: "🇺🇸", text: "VocabRise gamified my learning. I went from struggling with basic essays to writing eloquently. The Word Battles are addictive!" },
+                { name: "Ahmed K.", role: "Professional, UAE", flag: "🇦🇪", text: "The pronunciation lab fixed my accent issues completely. I now speak with confidence in all my international business meetings." },
+                { name: "Elena M.", role: "Teacher, Spain", flag: "🇪🇸", text: "I recommend this platform to all my ESL students. The UI is gorgeous, and the content is scientifically structured for retention." }
+              ].map((t, i) => (
+                <div 
+                  key={i} 
+                  className="reveal-on-scroll bg-[#12102A] p-8 rounded-3xl border border-gray-800 hover:border-gray-600 transition-all hover:-translate-y-2 hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)]" 
+                  style={{ 
+                    transitionDelay: `${i * 0.1}s`,
+                    animation: 'testimonialFloat 4s ease-in-out infinite',
+                    animationDelay: `${i === 0 ? 0 : i === 1 ? 1.3 : 2.6}s`
+                  }}
+                >
+                  <div className="flex gap-1 text-yellow-500 mb-6">
+                    {[1,2,3,4,5].map(star => <Star key={star} fill="currentColor" size={16} />)}
+                  </div>
+                  <p className="text-gray-300 mb-8 leading-relaxed text-lg font-medium">"{t.text}"</p>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--brand)] to-[var(--pink)] flex items-center justify-center font-heading font-black text-xl">
+                      {t.name.charAt(0)}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white">{t.name}</h4>
+                      <p className="text-sm text-gray-500">
+                        {t.role} <span style={{ fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif' }}>{t.flag}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* CTA SECTION */}
+        <section className="py-32 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0D0B1A] via-[var(--brand)]/20 to-[#0D0B1A] z-0"></div>
+          
+          {/* Floating 3D elements */}
+          <div className="absolute top-20 left-20 w-32 h-32 bg-[var(--pink)]/20 rounded-full blur-3xl animate-float"></div>
+          <div className="absolute bottom-20 right-20 w-40 h-40 bg-[var(--brand)]/30 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
+          
+          <div className="max-w-4xl mx-auto px-6 relative z-10 text-center reveal-on-scroll bg-[#12102A]/50 backdrop-blur-2xl border border-gray-800/50 p-12 md:p-20 rounded-[3rem] shadow-2xl">
+            <h2 className="text-5xl md:text-6xl font-heading font-black mb-6">Ready to Master English?</h2>
+            <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">Join 10,000+ warriors upgrading their vocabulary daily. It takes exactly 60 seconds to start.</p>
+            
+            <button 
+              onClick={() => router.push('/auth/signup')}
+              className="btn-shimmer relative overflow-hidden bg-gradient-to-r from-[var(--brand)] to-[var(--pink)] text-white px-10 py-5 rounded-2xl font-black text-xl hover:scale-105 transition-all shadow-[0_10px_40px_rgba(168,85,247,0.4)] mb-6 flex items-center justify-center gap-3 mx-auto"
+            >
+              GET STARTED TODAY <ArrowRight size={24} />
+            </button>
+            <p className="text-gray-500 font-medium uppercase tracking-widest text-sm flex items-center justify-center gap-2">
+              <CheckCircle2 size={16} className="text-green-500" /> Free forever • No credit card required
             </p>
           </div>
-
-          {/* Feature Cards Grid */}
-          <div className="grid sm:grid-cols-3 gap-6">
-            {/* Card 1 - Daily Words */}
-            <div className="feature-card hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 group cursor-pointer animate-fade-up hover:-translate-y-2 hover:shadow-xl transition-all duration-300">
-              <div className="h-0.5 w-0 bg-indigo-500 group-hover:w-full transition-all duration-500 mb-4 rounded-full" />
-              <div className="w-12 h-12 bg-indigo-600/10 rounded-lg flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-zinc-100 mb-2">
-                Daily Words
-              </h3>
-              <p className="text-zinc-400">
-                A new word every single day, carefully curated to help you expand your vocabulary progressively.
-              </p>
-            </div>
-
-            {/* Card 2 - Community Feed */}
-            <div className="feature-card hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 group cursor-pointer animate-fade-up-delay hover:-translate-y-2 hover:shadow-xl transition-all duration-300">
-              <div className="h-0.5 w-0 bg-indigo-500 group-hover:w-full transition-all duration-500 mb-4 rounded-full" />
-              <div className="w-12 h-12 bg-indigo-600/10 rounded-lg flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.856-1.487M15 10a3 3 0 11-6 0 3 3 0 016 0zM6 20h12v-2a9 9 0 00-12 0v2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-zinc-100 mb-2">
-                Community Feed
-              </h3>
-              <p className="text-zinc-400">
-                Share discoveries, learn from others, and be part of a vibrant community of language learners.
-              </p>
-            </div>
-
-            {/* Card 3 - Streaks & XP */}
-            <div className="feature-card hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 group cursor-pointer animate-fade-up-delay-2 hover:-translate-y-2 hover:shadow-xl transition-all duration-300">
-              <div className="h-0.5 w-0 bg-indigo-500 group-hover:w-full transition-all duration-500 mb-4 rounded-full" />
-              <div className="w-12 h-12 bg-indigo-600/10 rounded-lg flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-zinc-100 mb-2">
-                Streaks & XP
-              </h3>
-              <p className="text-zinc-400">
-                Stay motivated with daily streaks, earn XP points, and unlock achievements as you progress.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
       {/* FOOTER */}
-      <footer className="bg-zinc-900 border-t border-zinc-800 py-6">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-indigo-400 font-semibold hover:text-indigo-300 transition-colors duration-200 cursor-pointer">VocabRise</p>
-          <p className="text-zinc-500 text-sm">Built for learners © 2025</p>
+      <footer className="border-t border-gray-800 bg-[#0A0815] py-12 relative z-10">
+        <div className="max-w-[1400px] mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[var(--brand)] to-[var(--brand-bright)] flex items-center justify-center font-heading font-black text-white text-sm">VR</div>
+            <span className="font-heading font-bold text-xl">VocabRise</span>
+          </div>
+          <p className="text-gray-500 text-sm">© 2026 VocabRise. All rights reserved.</p>
+          <div className="flex gap-4">
+            <a href="#" className="text-gray-500 hover:text-white transition-colors">Twitter</a>
+            <a href="#" className="text-gray-500 hover:text-white transition-colors">Discord</a>
+            <a href="#" className="text-gray-500 hover:text-white transition-colors">Privacy</a>
+          </div>
         </div>
       </footer>
-    </main>
+    </div>
   )
 }

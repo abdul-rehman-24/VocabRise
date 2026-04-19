@@ -13,15 +13,21 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
+      include: {
+        stats: {
+          include: {
+            collectedWords: true,
+          },
+        },
+      },
     })
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const stats = await prisma.userStats.findUnique({
-      where: { userId: user.id },
-    })
+    const stats = user.stats
+    const wordsLearned = stats?.collectedWords?.length || 0
 
     if (!stats) {
       return NextResponse.json({
@@ -36,7 +42,7 @@ export async function GET() {
       totalXP: stats.totalXP,
       level: stats.level,
       currentStreak: stats.currentStreak,
-      wordsLearned: stats.wordsLearned,
+      wordsLearned,
     })
   } catch (error) {
     console.error('Error fetching stats:', error)

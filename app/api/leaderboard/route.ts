@@ -15,6 +15,7 @@ export async function GET(request: Request) {
             id: true,
           },
         },
+        collectedWords: true,
       },
       orderBy: {
         totalXP: 'desc',
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
       image: stat.user.image,
       totalXP: stat.totalXP,
       level: stat.level,
-      wordsLearned: stat.wordsLearned,
+      wordsLearned: stat.collectedWords.length,
     }))
 
     // If userId provided, fetch their rank
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
     if (userId && typeof userId === 'string' && userId.length > 10) {
       const userStat = await prisma.userStats.findUnique({
         where: { userId },
+        include: { collectedWords: true },
       })
       
       if (userStat) {
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
           rank: betterUsers + 1,
           totalXP: userStat.totalXP,
           level: userStat.level,
-          wordsLearned: userStat.wordsLearned,
+          wordsLearned: userStat.collectedWords.length,
         }
       }
     }

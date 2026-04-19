@@ -5,9 +5,11 @@ import { prisma } from '@/app/lib/prisma'
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+
     const session = await getServerSession(authOptions)
 
     if (!session || !session.user?.email) {
@@ -22,7 +24,7 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const postId = params.id
+    const postId = id
 
     // Check if post exists
     const post = await prisma.post.findUnique({
@@ -33,7 +35,7 @@ export async function POST(
       return NextResponse.json({ error: 'Post not found' }, { status: 404 })
     }
 
-    // Check if like already exists
+    // Check existing like
     const existingLike = await prisma.like.findUnique({
       where: {
         userId_postId: {
@@ -43,33 +45,47 @@ export async function POST(
       },
     })
 
-    if (existingLike) {
-      // Delete like and decrement count
-      await prisma.like.delete({
-        where: { id: existingLike.id },
-      })
-
-      await prisma.post.update({
-        where: { id: postId },
-        data: { likesCount: { decrement: 1 } },
-      })
-
-      return NextResponse.json({ liked: false, likesCount: post.likesCount - 1 })
-    } else {
-      // Create like and increment count
-      await prisma.like.create({
-        data: {
+    // Check existing dislike
+    const existingDislike = await prisma.dislike.findUnique({
+      where: {
+        userId_postId: {
           userId: user.id,
           postId: postId,
         },
+      },
+    })
+
+    let newLikesCount = post.likesCount
+    let newDislikesCount = post.dislikesCount
+
+    if (existingLike) {
+      // Remove like
+      await prisma.like.delete({ where: { id: existingLike.id } })
+      newLikesCount -= 1
+      await prisma.post.update({
+        where: { id: postId },
+        data: { likesCount: newLikesCount },
       })
+      return NextResponse.json({ liked: false, disliked: false, likesCount: newLikesCount, dislikesCount: newDislikesCount })
+    } else {
+      // Add like
+      await prisma.like.create({
+        data: { userId: user.id, postId: postId },
+      })
+      newLikesCount += 1
+
+      // Remove dislike if exists
+      if (existingDislike) {
+        await prisma.dislike.delete({ where: { id: existingDislike.id } })
+        newDislikesCount -= 1
+      }
 
       await prisma.post.update({
         where: { id: postId },
-        data: { likesCount: { increment: 1 } },
+        data: { likesCount: newLikesCount, dislikesCount: newDislikesCount },
       })
 
-      return NextResponse.json({ liked: true, likesCount: post.likesCount + 1 })
+      return NextResponse.json({ liked: true, disliked: false, likesCount: newLikesCount, dislikesCount: newDislikesCount })
     }
   } catch (error) {
     console.error('Error toggling like:', error)

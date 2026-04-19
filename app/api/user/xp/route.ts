@@ -30,14 +30,39 @@ export async function POST(request: Request) {
       where: { userId: user.id },
     })
 
+    // Calculate streak
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    let newStreak = 1
+    let newLongestStreak = 1
+
+    if (stats && stats.lastActiveDate) {
+      const lastActive = new Date(stats.lastActiveDate)
+      lastActive.setHours(0, 0, 0, 0)
+      
+      const dayDiff = Math.floor((today.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24))
+      
+      if (dayDiff === 0) {
+        // Same day, keep current streak
+        newStreak = stats.currentStreak
+      } else if (dayDiff === 1) {
+        // Consecutive day, increment streak
+        newStreak = stats.currentStreak + 1
+      }
+      // else: dayDiff > 1, reset streak to 1
+      
+      newLongestStreak = Math.max(newStreak, stats.longestStreak)
+    }
+
     if (!stats) {
       stats = await prisma.userStats.create({
         data: {
           userId: user.id,
           totalXP: xp,
           level: Math.floor(xp / 100) + 1,
-          wordsLearned: 1,
-          currentStreak: 0,
+          currentStreak: newStreak,
+          longestStreak: newLongestStreak,
+          lastActiveDate: new Date(),
         },
       })
     } else {
@@ -49,7 +74,9 @@ export async function POST(request: Request) {
         data: {
           totalXP: newTotalXP,
           level: newLevel,
-          wordsLearned: { increment: 1 },
+          currentStreak: newStreak,
+          longestStreak: newLongestStreak,
+          lastActiveDate: new Date(),
         },
       })
     }

@@ -15,9 +15,23 @@ export async function POST(request: Request) {
       )
     }
 
-    if (password.length < 6) {
+    if (name.trim().length < 2) {
       return NextResponse.json(
-        { error: 'Password must be at least 6 characters' },
+        { error: 'Full name must be at least 2 characters' },
+        { status: 400 }
+      )
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json(
+        { error: 'Invalid email address' },
+        { status: 400 }
+      )
+    }
+
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters' },
         { status: 400 }
       )
     }
@@ -29,21 +43,31 @@ export async function POST(request: Request) {
 
     if (existingUser) {
       return NextResponse.json(
-        { error: 'Email already in use' },
-        { status: 400 }
+        { error: 'An account with this email already exists' },
+        { status: 409 }
       )
     }
 
     // Hash password
-    const hashedPassword = await bcryptjs.hash(password, 10)
+    const passwordHash = await bcryptjs.hash(password, 10)
 
     // Create user
     const user = await prisma.user.create({
       data: {
         name,
         email,
-        password: hashedPassword,
+        passwordHash,
         role: 'USER',
+        emailVerified: false,
+      },
+    })
+
+    // Create auth provider record
+    await prisma.authProvider.create({
+      data: {
+        userId: user.id,
+        provider: 'email',
+        providerAccountId: email,
       },
     })
 
@@ -54,18 +78,14 @@ export async function POST(request: Request) {
         totalXP: 0,
         level: 1,
         currentStreak: 0,
-        wordsLearned: 0,
       },
     })
 
     return NextResponse.json(
       {
+        success: true,
+        userId: user.id,
         message: 'Account created successfully',
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        },
       },
       { status: 201 }
     )
