@@ -123,6 +123,7 @@ export default function WordBattle() {
   const roundTypeRef = useRef('');
   const playerScoreRef = useRef(0);
   const botScoreRef = useRef(0);
+  const totalXpRef = useRef(0);
   const diffRef = useRef('MEDIUM');
 
   const [inputValue, setInputValue] = useState('');
@@ -235,6 +236,7 @@ export default function WordBattle() {
     setRoundWinner(winner);
     setRoundXP(xp);
     setTotalXP(p => p + xp);
+    totalXpRef.current += xp;
     
     setTimeout(() => {
       setGamePhase('roundResult');
@@ -246,8 +248,18 @@ export default function WordBattle() {
           startRound(currentRoundRef.current + 1);
         } else {
           setGamePhase('gameOver');
-          if (playerScoreRef.current > botScoreRef.current) playSound('win');
+          const isWin = playerScoreRef.current > botScoreRef.current;
+          if (isWin) playSound('win');
           else playSound('defeat');
+          
+          fetch('/api/battle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              finalXP: totalXpRef.current + (isWin ? 50 : 0),
+              isWin: isWin
+            })
+          }).catch(console.error);
         }
       }, 3000);
     }, 1500); // 1.5s delay to show correct answer before moving to result screen

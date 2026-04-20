@@ -26,6 +26,10 @@ model User {
   posts         Post[]
   savedWords    SavedWord[]
   stats         UserStats?
+  nominations   Nomination[]
+  weeklyVotes   WeeklyVote[]
+  quizAttempts  QuizAttempt[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -124,16 +128,16 @@ model SavedWord {
   id          String     @id @default(cuid())
   userId      String
   wordOfDayId String?
-  postId      String?
   word        String
   definition  String
   urduMeaning String?
+  masteryLevel  Int      @default(0)
+  hasPronounced Boolean  @default(false)
   createdAt   DateTime   @default(now())
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   wordOfDay   WordOfDay? @relation(fields: [wordOfDayId], references: [id])
 
   @@unique([userId, wordOfDayId])
-  @@unique([userId, postId])
   @@map("saved_words")
 }
 
@@ -144,6 +148,7 @@ model UserStats {
   level          Int       @default(1)
   currentStreak  Int       @default(0)
   longestStreak  Int       @default(0)
+  wordsLearned   Int       @default(0)
   lastActiveDate DateTime?
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   collectedWords CollectedWord[]
@@ -158,6 +163,8 @@ model CollectedWord {
   definition  String
   category    String    @default("advanced")
   difficulty  Int       @default(3)
+  masteryLevel  Int      @default(0)
+  hasPronounced Boolean  @default(false)
   collectedAt DateTime  @default(now())
   userStats   UserStats @relation(fields: [userStatsId], references: [id], onDelete: Cascade)
 
@@ -175,4 +182,64 @@ enum Difficulty {
   BEGINNER
   INTERMEDIATE
   ADVANCED
+}
+
+model Nomination {
+  id          String       @id @default(cuid())
+  word        String
+  definition  String
+  example     String?
+  submittedBy User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  weekYear    Int
+  weekNumber  Int
+  createdAt   DateTime     @default(now())
+  votes       WeeklyVote[]
+
+  @@unique([userId, weekNumber, weekYear])
+  @@index([weekNumber, weekYear])
+  @@map("nominations")
+}
+
+model WeeklyVote {
+  id           String     @id @default(cuid())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  nomination   Nomination @relation(fields: [nominationId], references: [id], onDelete: Cascade)
+  nominationId String
+  weekYear     Int
+  weekNumber   Int
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, weekNumber, weekYear])
+  @@index([nominationId])
+  @@map("weekly_votes")
+}
+
+model QuizAttempt {
+  id          String   @id @default(cuid())
+  userId      String
+  score       Int
+  maxScore    Int      @default(10)
+  category    String?
+  xpEarned    Int      @default(0)
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("quiz_attempts")
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  message     String
+  isRead      Boolean  @default(false)
+  link        String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
 }

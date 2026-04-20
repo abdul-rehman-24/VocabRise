@@ -427,7 +427,15 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--brand-bright);
 }
 
-/* Removed prefers-reduced-motion to allow loading spinners to animate on all systems */
+/* ──  Accessibility improvements ── */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ── Group hover for related elements ── */
 .group:hover .group-hover\ {
   opacity: 1;

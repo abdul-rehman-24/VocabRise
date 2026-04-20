@@ -99,31 +99,14 @@ export default function SignUp() {
     <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <div className="w-full max-w-md rounded-2xl p-8 animate-fade-up" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(124, 109, 250, 0.1)' }}>
         {/* Logo */}
-        <Link href="/" className="flex items-center justify-center mb-8 group hover:opacity-90 transition-opacity cursor-pointer">
-          <div className="flex items-center gap-3">
-            <div className="relative w-12 h-12 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
-              <div className="absolute inset-0 bg-[var(--gradient-primary)] rounded-xl blur-[10px] opacity-50 group-hover:opacity-100 transition-opacity duration-500 animate-pulse"></div>
-              <div className="relative w-full h-full rounded-xl bg-[rgba(18,18,31,0.7)] border border-[rgba(124,109,250,0.4)] backdrop-blur-md flex items-center justify-center overflow-hidden shadow-[inset_0_1px_2px_rgba(255,255,255,0.2)]">
-                <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-[var(--brand-bright)] to-transparent opacity-80"></div>
-                <div className="absolute bottom-0 right-0 w-[1.5px] h-full bg-gradient-to-b from-transparent via-[#e040fb] to-transparent opacity-60"></div>
-                <div className="absolute inset-0 bg-gradient-to-tr from-[var(--brand)] via-transparent to-transparent opacity-30 group-hover:opacity-60 transition-opacity duration-300"></div>
-                <span className="relative z-10 font-heading font-black text-[22px] tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-white via-white to-[var(--brand-bright)] drop-shadow-[0_2px_10px_rgba(124,109,250,0.8)]">VR</span>
-              </div>
+        <div className="flex items-center justify-center mb-8">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-dim))' }}>
+              <span className="text-white font-bold text-lg">V</span>
             </div>
-            <span style={{ 
-              fontFamily: 'var(--font-heading)', 
-              fontWeight: 800, 
-              fontSize: '28px',
-              background: `linear-gradient(135deg, var(--text-primary), var(--brand-bright))`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              letterSpacing: '-0.5px'
-            }}>
-              VocabRise
-            </span>
+            <span className="font-bold text-xl" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>VocabRise</span>
           </div>
-        </Link>
+        </div>
 
         {/* Heading */}
         <h1 className="text-2xl font-bold text-center mb-2" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>Create your account</h1>
@@ -141,7 +124,7 @@ export default function SignUp() {
           onClick={handleGoogleSignUp}
           disabled={loading}
           className="w-full font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60 text-white hover:shadow-lg active:scale-95"
-          style={{ background: 'var(--gradient-primary)', boxShadow: '0 4px 12px rgba(124, 109, 250, 0.3)' }}
+          style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-dim))', boxShadow: '0 4px 12px rgba(124, 109, 250, 0.3)' }}
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -276,7 +259,7 @@ export default function SignUp() {
             type="submit"
             disabled={loading}
             className="w-full text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-6 hover:shadow-lg active:scale-95"
-            style={{ background: 'var(--gradient-primary)', fontFamily: 'var(--font-body)', boxShadow: '0 4px 12px rgba(124, 109, 250, 0.3)' }}
+            style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-dim))', fontFamily: 'var(--font-body)', boxShadow: '0 4px 12px rgba(124, 109, 250, 0.3)' }}
           >
             {loading ? (
               <>

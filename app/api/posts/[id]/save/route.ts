@@ -31,12 +31,10 @@ export async function POST(
     }
 
     // Check if word is already saved
-    const existingSave = await prisma.savedWord.findUnique({
+    const existingSave = await prisma.savedWord.findFirst({
       where: {
-        userId_postId: {
-          userId: user.id,
-          postId: postId,
-        },
+        userId: user.id,
+        word: post.word,
       },
     })
 
@@ -54,7 +52,6 @@ export async function POST(
       await prisma.savedWord.create({
         data: {
           userId: user.id,
-          postId: postId,
           word: post.word,
           definition: post.definition,
           urduMeaning: post.urduMeaning,

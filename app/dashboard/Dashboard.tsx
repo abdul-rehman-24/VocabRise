@@ -6,7 +6,8 @@ import { useState, useEffect, useRef } from 'react'
 import Navbar from '@/app/components/shared/Navbar'
 import { Flame, Star, Book, Zap, Bookmark, Volume2, Users, Clock, Sparkles } from 'lucide-react'
 import DashboardSkeleton from './DashboardSkeleton'
-
+import { useDashboardData } from '@/hooks/useDashboardData'
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates'
 // Sparkline Mini Chart Component
 const Sparkline = ({ color }: { color: string }) => {
   return (
@@ -93,58 +94,38 @@ export default function Dashboard() {
   const [countdown, setCountdown] = useState("00:04:32")
   const [mounted, setMounted] = useState(false)
 
+  const {
+    displayName,
+    currentStreak,
+    dailyGoalCount,
+    dailyGoalTarget,
+    streakValue,
+    xpValue,
+    wordsLearnedValue,
+    levelValue,
+    wordTitle,
+    wordDefinition,
+    wordUrdu,
+    wordExample,
+    wordDifficulty,
+    isWordSaved,
+    onlineCount,
+    todayDate,
+    isLoading: dataLoading,
+    error,
+    refetch
+  } = useDashboardData()
+
+  const userId = session?.user?.id || session?.user?.email
+  useRealtimeUpdates(userId as string, refetch)
+
+  if (error) console.error("Dashboard error:", error)
+
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const [stats, setStats] = useState({
-    totalXP: 2450,
-    level: 12,
-    currentStreak: 3,
-    wordsLearned: 142,
-  })
-
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/signin')
-    }
-  }, [status, router])
-
-  useEffect(() => {
-    // Wait until session is ready
-    if (status === 'loading') return;
-
-    // Check cache first
-    const cached = localStorage.getItem('dashboard_cache');
-    if (cached) {
-      try {
-        setStats(JSON.parse(cached));
-        setLoading(false); // show instantly
-      } catch (e) {
-        console.error("Cache parsing error", e);
-      }
-    }
-
-    // Simulate fetchFresh
-    const fetchFresh = () => new Promise<typeof stats>(resolve => {
-      setTimeout(() => {
-        resolve({
-          totalXP: 2450,
-          level: 12,
-          currentStreak: 3,
-          wordsLearned: 142,
-        })
-      }, 800)
-    })
-
-    fetchFresh().then(d => {
-      setStats(d);
-      localStorage.setItem('dashboard_cache', JSON.stringify(d));
-      setLoading(false);
-    })
-  }, [status])
+  const loading = status === 'loading' || dataLoading
 
   // Scroll animations
   useEffect(() => {
@@ -165,11 +146,11 @@ export default function Dashboard() {
 
   // Toast Notification
   useEffect(() => {
-    if (!loading && stats.currentStreak > 0) {
+    if (!loading && (currentStreak ?? 0) > 0) {
       const timer = setTimeout(() => setShowToast(true), 3000)
       return () => clearTimeout(timer)
     }
-  }, [loading, stats.currentStreak])
+  }, [loading, currentStreak])
 
   // Fake Countdown
   useEffect(() => {
@@ -290,12 +271,12 @@ export default function Dashboard() {
           <p className="text-[#94A3B8] font-medium mb-1 font-body text-lg">Good morning,</p>
           <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
             <h1 className="text-4xl md:text-5xl font-heading font-black">
-              {userName.split(' ')[0]}
+              {displayName?.split(' ')[0] ?? 'User'}
             </h1>
-            {stats.currentStreak >= 3 && (
+            {(currentStreak ?? 0) >= 3 && (
               <div className="relative inline-flex items-center gap-2 bg-gradient-to-r from-[#F97316] to-[#EC4899] px-4 py-1.5 rounded-full text-sm font-bold shadow-[0_0_20px_rgba(249,115,22,0.4)]">
                 <Flame size={16} className="text-white" />
-                <span className="text-white">On Fire — {stats.currentStreak} Day Streak!</span>
+                <span className="text-white">On Fire — {currentStreak} Day Streak!</span>
                 <div className="absolute inset-0 pointer-events-none">
                   {[...Array(6)].map((_, i) => {
                     const tx = [15, -25, 30, -10, 20, -5][i];
@@ -314,9 +295,9 @@ export default function Dashboard() {
             <span className="text-[#94A3B8] flex items-center gap-2"><Clock size={16} /> {mounted ? today : '...'}</span>
             <div className="hidden sm:block w-1.5 h-1.5 rounded-full bg-gray-700"></div>
             <div className="flex items-center gap-3">
-              <span className="text-[#A855F7]">Daily Goal: 2/5 words</span>
+              <span className="text-[#A855F7]">Daily Goal: {dailyGoalCount ?? 0}/{dailyGoalTarget ?? 5} words</span>
               <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-[#7C3AED] to-[#A855F7] w-2/5 rounded-full"></div>
+                <div className="h-full bg-gradient-to-r from-[#7C3AED] to-[#A855F7] rounded-full" style={{ width: `${Math.min(((dailyGoalCount ?? 0) / (dailyGoalTarget ?? 5)) * 100, 100)}%` }}></div>
               </div>
             </div>
           </div>
@@ -325,10 +306,10 @@ export default function Dashboard() {
         {/* STAT CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {[
-            { label: 'Current Streak', value: stats.currentStreak, color: '#F97316', icon: Flame, delay: 0 },
-            { label: 'Total XP', value: stats.totalXP, color: '#A855F7', icon: Sparkles, delay: 1 },
-            { label: 'Words Learned', value: stats.wordsLearned, color: '#22C55E', icon: Book, delay: 2 },
-            { label: 'Level', value: stats.level, color: '#EAB308', icon: Star, delay: 3 }
+            { label: 'Current Streak', value: streakValue ?? 0, color: '#F97316', icon: Flame, delay: 0 },
+            { label: 'Total XP', value: xpValue ?? 0, color: '#A855F7', icon: Sparkles, delay: 1 },
+            { label: 'Words Learned', value: wordsLearnedValue ?? 0, color: '#22C55E', icon: Book, delay: 2 },
+            { label: 'Level', value: levelValue ?? 1, color: '#EAB308', icon: Star, delay: 3 }
           ].map((stat, i) => (
             <div
               key={i}
@@ -362,16 +343,15 @@ export default function Dashboard() {
               <div className="absolute top-0 left-0 w-1 h-full bg-[#7C3AED] shadow-[0_0_20px_#7C3AED]"></div>
 
               <div className="flex justify-between items-start mb-8">
-                <span className="bg-[#7C3AED]/20 text-[#A855F7] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border border-[#7C3AED]/30">Adjective</span>
-                <button className="flex items-center gap-2 text-sm font-bold text-[#94A3B8] hover:text-[#A855F7] transition-colors group/btn">
-                  <Bookmark size={18} className="group-hover/btn:fill-[#A855F7] transition-colors" /> Save Word
+                <span className="bg-[#7C3AED]/20 text-[#A855F7] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border border-[#7C3AED]/30">{wordDifficulty ?? 'INTERMEDIATE'}</span>
+                <button className={`flex items-center gap-2 text-sm font-bold ${isWordSaved ? 'text-[#A855F7]' : 'text-[#94A3B8] hover:text-[#A855F7]'} transition-colors group/btn`}>
+                  <Bookmark size={18} className={`${isWordSaved ? 'fill-[#A855F7]' : 'group-hover/btn:fill-[#A855F7]'} transition-colors`} /> {isWordSaved ? 'Saved' : 'Save Word'}
                 </button>
               </div>
 
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-5xl md:text-6xl font-heading font-black mb-2 text-white">Ephemeral</h3>
-                  <p className="text-[#A855F7] font-medium text-lg italic">/əˈfem(ə)rəl/</p>
+                  <h3 className="text-5xl md:text-6xl font-heading font-black mb-2 text-white">{wordTitle ?? 'No word today'}</h3>
                 </div>
 
                 <div className="flex items-center gap-4 bg-black/30 p-3 pr-5 rounded-2xl border border-white/5">
@@ -386,12 +366,14 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <p className="text-xl text-[#94A3B8] leading-relaxed mb-4">Lasting for a very short time; short-lived or transitory.</p>
-              <p className="text-[#EC4899] font-medium text-lg mb-8 font-heading">عارضی (Aarzi) / تھوڑی دیر کا</p>
+              <p className="text-xl text-[#94A3B8] leading-relaxed mb-4">{wordDefinition ?? 'Check back later for a new word.'}</p>
+              {wordUrdu && <p className="text-[#EC4899] font-medium text-lg mb-8 font-heading">{wordUrdu}</p>}
 
-              <div className="bg-white/5 border border-white/10 rounded-xl p-5 italic text-[#94A3B8]">
-                "The <strong className="text-white">ephemeral</strong> beauty of the sunset painted the sky in fleeting colors."
-              </div>
+              {wordExample && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-5 italic text-[#94A3B8]">
+                  "{wordExample}"
+                </div>
+              )}
 
               <div className="flex gap-2 justify-center mt-8">
                 <div className="w-2 h-2 rounded-full bg-[#7C3AED] shadow-[0_0_8px_#7C3AED]"></div>
@@ -414,7 +396,7 @@ export default function Dashboard() {
 
               <div className="absolute top-6 right-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#22C55E]"></div>
-                <span className="text-xs font-bold text-green-400">248 Online</span>
+                <span className="text-xs font-bold text-green-400">{onlineCount ?? 0} Online</span>
               </div>
 
               <div className="p-8 flex flex-col h-full justify-between relative z-10">

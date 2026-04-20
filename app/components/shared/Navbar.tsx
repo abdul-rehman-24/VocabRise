@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useState } from 'react'
 import { Menu, X } from 'lucide-react'
+import NotificationBell from './NotificationBell'
 
 const getAvatarColor = (name: string) => {
   const colors = [
@@ -181,6 +182,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             {session ? (
               <>
+                <NotificationBell />
                 <button
                   onClick={() => signOut({ callbackUrl: '/' })}
                   className="text-sm transition-all hidden md:block px-4 py-2 rounded-lg hover:bg-[rgba(124,109,250,0.1)]"

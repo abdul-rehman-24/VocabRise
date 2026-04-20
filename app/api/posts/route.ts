@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/lib/auth'
 import { prisma } from '@/app/lib/prisma'
+import { addXP } from '@/lib/xp'
 
 // Simple in-memory rate limiting (Note: resets on serverless cold starts)
 const rateLimitMap = new Map<string, number>();
@@ -139,6 +140,9 @@ export async function POST(request: Request) {
         },
       },
     })
+
+    // Add +10 XP for posting a word
+    await addXP(user.id, 10);
 
     // Update rate limit
     rateLimitMap.set(session.user.email, now);

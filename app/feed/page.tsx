@@ -2,10 +2,8 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import Navbar from '@/app/components/shared/Navbar'
-import { toast } from 'react-hot-toast'
-import { Inbox, Search, Heart, ThumbsDown, MessageCircle, Bookmark, Share2, Play, Send, Check, X, Loader2 } from 'lucide-react'
 
 interface Post {
   id: string
@@ -13,7 +11,6 @@ interface Post {
   definition: string
   urduMeaning: string | null
   example: string | null
-  difficulty: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'GRE'
   likesCount: number
   dislikesCount: number
   createdAt: string
@@ -31,29 +28,28 @@ interface PaginationData {
   pages: number
 }
 
-const FLOATING_WORDS = ["RESILIENT", "ELOQUENT", "BRAVE", "LUCID", "TENACIOUS", "METICULOUS", "SERENDIPITY", "EPHEMERAL"];
-
+// Consistent colors for avatars based on name
 const getAvatarColor = (name: string) => {
   const colors = [
-    'linear-gradient(135deg, #7C3AED, #EC4899)',
-    'linear-gradient(135deg, #06B6D4, #3B82F6)',
-    'linear-gradient(135deg, #F59E0B, #EF4444)',
-    'linear-gradient(135deg, #10B981, #059669)',
+    'linear-gradient(135deg, #7c6dfa, #9d51f5)',
+    'linear-gradient(135deg, #00d68f, #00b377)',
+    'linear-gradient(135deg, #f5a623, #e69110)',
+    'linear-gradient(135deg, #ff4d6d, #d93855)',
+    'linear-gradient(135deg, #5b8def, #3b70d4)',
+    'linear-gradient(135deg, #e040fb, #b82ad0)',
   ];
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
   return colors[Math.abs(hash) % colors.length];
 };
 
-const getLevelColor = (level: string) => {
-  switch (level) {
-    case 'BEGINNER': return '#22C55E';
-    case 'INTERMEDIATE': return '#EAB308';
-    case 'ADVANCED': return '#A855F7';
-    case 'GRE': return '#EF4444';
-    default: return '#94A3B8';
-  }
-};
+const getDifficulty = (word: string) => {
+  if (word.length > 8) return { label: 'ADVANCED', class: 'badge-advanced', bg: 'rgba(255, 77, 109, 0.08)', color: 'var(--semantic-danger)', border: 'var(--semantic-danger)' }
+  if (word.length > 5) return { label: 'INTERMEDIATE', class: 'badge-intermediate', bg: 'rgba(245, 166, 35, 0.08)', color: 'var(--semantic-warning)', border: 'var(--semantic-warning)' }
+  return { label: 'BEGINNER', class: 'badge-beginner', bg: '#0d2218', color: '#00d68f', border: 'rgba(0,214,143,0.25)' }
+}
 
 export default function FeedPage() {
   const { data: session, status } = useSession()
@@ -65,13 +61,10 @@ export default function FeedPage() {
   const [pagination, setPagination] = useState<PaginationData | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
   const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(new Set())
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set())
-  const [filter, setFilter] = useState<'latest' | 'trending' | 'discussed' | 'following'>('latest')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [filter, setFilter] = useState<'latest' | 'trending' | 'discussed' | 'saved'>('latest')
   const [error, setError] = useState('')
 
   const [formData, setFormData] = useState({
@@ -79,36 +72,14 @@ export default function FeedPage() {
     definition: '',
     urduMeaning: '',
     example: '',
-    difficulty: 'INTERMEDIATE',
   })
 
-  // Scroll lock for modal
   useEffect(() => {
-    if (showModal) document.body.style.overflow = 'hidden';
-    else document.body.style.overflow = '';
-    return () => { document.body.style.overflow = ''; };
-  }, [showModal]);
-
-  // Observer for feed cards
-  const observer = useRef<IntersectionObserver | null>(null);
-  const cardRef = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return;
-    if (!observer.current) {
-      observer.current = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible-card');
-            observer.current?.unobserve(entry.target);
-          }
-        });
-      }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin')
+    } else if (status === 'authenticated') {
+      fetchSavedWords()
     }
-    observer.current.observe(node);
-  }, []);
-
-  useEffect(() => {
-    if (status === 'unauthenticated') router.push('/auth/signin')
-    else if (status === 'authenticated') fetchSavedWords()
   }, [status, router])
 
   useEffect(() => {
@@ -128,24 +99,70 @@ export default function FeedPage() {
     }
   }
 
-  const fetchPosts = async (pageNum: number, filterType: string = 'latest') => {
+  const fetchPosts = async (pageNum: number, filterType: 'latest' | 'trending' | 'discussed' | 'saved' = 'latest') => {
     try {
       const isLoadMore = pageNum > 1
       isLoadMore ? setLoadingMore(true) : setLoading(true)
 
-      // Mock following filter to latest for now
-      const apiFilter = filterType === 'following' ? 'latest' : filterType;
-      
-      const res = await fetch(`/api/posts?page=${pageNum}&limit=10&sort=${apiFilter}`)
-      const data = await res.json()
-
-      if (data.pagination) {
-        if (isLoadMore) setPosts(prev => [...prev, ...data.posts])
-        else setPosts(data.posts)
-        setPagination(data.pagination)
-        setPage(pageNum)
+      let res
+      if (filterType === 'saved') {
+        res = await fetch(`/api/saved-words?page=${pageNum}&limit=10`)
+        const data = await res.json()
+        if (data.savedWords) {
+          if (isLoadMore) {
+            // Format saved words as posts
+            const formattedPosts = data.savedWords.map((w: any) => ({
+              id: w.postId || w.id,
+              word: w.word,
+              definition: w.definition,
+              urduMeaning: w.urduMeaning,
+              example: w.example,
+              likesCount: 0,
+              dislikesCount: 0,
+              createdAt: w.createdAt,
+              user: {
+                id: session?.user?.email || '',
+                name: session?.user?.name || 'You',
+                image: session?.user?.image || null,
+              },
+            }))
+            setPosts(prev => [...prev, ...formattedPosts])
+          } else {
+            const formattedPosts = data.savedWords.map((w: any) => ({
+              id: w.postId || w.id,
+              word: w.word,
+              definition: w.definition,
+              urduMeaning: w.urduMeaning,
+              example: w.example,
+              likesCount: 0,
+              dislikesCount: 0,
+              createdAt: w.createdAt,
+              user: {
+                id: session?.user?.email || '',
+                name: session?.user?.name || 'You',
+                image: session?.user?.image || null,
+              },
+            }))
+            setPosts(formattedPosts)
+          }
+          setPagination(data.pagination)
+          setPage(pageNum)
+        }
       } else {
-        setPosts(Array.isArray(data) ? data : [])
+        res = await fetch(`/api/posts?page=${pageNum}&limit=10&sort=${filterType}`)
+        const data = await res.json()
+
+        if (data.pagination) {
+          if (isLoadMore) {
+            setPosts(prev => [...prev, ...data.posts])
+          } else {
+            setPosts(data.posts)
+          }
+          setPagination(data.pagination)
+          setPage(pageNum)
+        } else {
+          setPosts(Array.isArray(data) ? data : [])
+        }
       }
     } catch (error) {
       console.error('Error fetching posts:', error)
@@ -157,8 +174,6 @@ export default function FeedPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (formData.word.length > 50 || formData.definition.length > 200) return;
-    
     setFormLoading(true)
     setError('')
 
@@ -168,23 +183,21 @@ export default function FeedPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       })
+
       const data = await res.json()
+
       if (!res.ok) {
         setError(data.error || 'Something went wrong')
         return
       }
 
-      setSubmitSuccess(true)
-      setTimeout(() => {
-        fetchPosts(1, filter)
-        setFormData({ word: '', definition: '', urduMeaning: '', example: '', difficulty: 'INTERMEDIATE' })
-        setShowModal(false)
-        setSubmitSuccess(false)
-        setFormLoading(false)
-        toast.success('🎉 Word posted successfully!', { style: { background: '#111', color: '#fff', border: '1px solid #7C3AED' } })
-      }, 1500)
+      await fetchPosts(1, filter)
+      setFormData({ word: '', definition: '', urduMeaning: '', example: '' })
+      setShowModal(false)
     } catch (error) {
       setError('Failed to create post')
+      console.error('Error creating post:', error)
+    } finally {
       setFormLoading(false)
     }
   }
@@ -194,19 +207,17 @@ export default function FeedPage() {
       const res = await fetch(`/api/posts/${postId}/like`, { method: 'POST' })
       if (res.ok) {
         const data = await res.json()
-        setLikedPosts(prev => {
-          const next = new Set(prev);
-          data.liked ? next.add(postId) : next.delete(postId);
-          return next;
-        })
-        setDislikedPosts(prev => {
-          const next = new Set(prev);
-          next.delete(postId);
-          return next;
-        })
-        setPosts(posts.map(p => p.id === postId ? { ...p, likesCount: data.likesCount, dislikesCount: data.dislikesCount } : p))
+        if (data.liked) {
+          setLikedPosts(prev => new Set([...prev, postId]))
+          setDislikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet })
+        } else {
+          setLikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet })
+        }
+        setPosts(posts.map(post => post.id === postId ? { ...post, likesCount: data.likesCount, dislikesCount: data.dislikesCount } : post))
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error toggling like:', error)
+    }
   }
 
   const handleDislike = async (postId: string) => {
@@ -214,19 +225,17 @@ export default function FeedPage() {
       const res = await fetch(`/api/posts/${postId}/dislike`, { method: 'POST' })
       if (res.ok) {
         const data = await res.json()
-        setDislikedPosts(prev => {
-          const next = new Set(prev);
-          data.disliked ? next.add(postId) : next.delete(postId);
-          return next;
-        })
-        setLikedPosts(prev => {
-          const next = new Set(prev);
-          next.delete(postId);
-          return next;
-        })
-        setPosts(posts.map(p => p.id === postId ? { ...p, dislikesCount: data.dislikesCount, likesCount: data.likesCount } : p))
+        if (data.disliked) {
+          setDislikedPosts(prev => new Set([...prev, postId]))
+          setLikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet })
+        } else {
+          setDislikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet })
+        }
+        setPosts(posts.map(post => post.id === postId ? { ...post, dislikesCount: data.dislikesCount, likesCount: data.likesCount } : post))
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error toggling dislike:', error)
+    }
   }
 
   const toggleSave = async (postId: string) => {
@@ -236,23 +245,23 @@ export default function FeedPage() {
         const data = await res.json()
         setSavedPosts(prev => {
           const next = new Set(prev)
-          data.saved ? next.add(postId) : next.delete(postId)
+          if (data.saved) {
+            next.add(postId)
+          } else {
+            next.delete(postId)
+          }
           return next
         })
-        if (data.saved) toast.success('Word saved to Passport!', { icon: '🔖', style: { background: '#1a1a2e', color: '#fff', border: '1px solid #7C3AED' } })
       }
-    } catch (error) {}
-  }
-
-  const playAudio = (text: string) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      console.error('Error saving word:', error)
     }
   }
 
   const formatTimeAgo = (createdAt: string) => {
-    const seconds = Math.floor((new Date().getTime() - new Date(createdAt).getTime()) / 1000)
+    const date = new Date(createdAt)
+    const now = new Date()
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
     if (seconds < 60) return 'just now'
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
@@ -261,11 +270,11 @@ export default function FeedPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-[#0D0B1A] pb-12">
-        <Navbar />
-        <main className="max-w-[800px] mx-auto flex items-center justify-center min-h-[50vh]">
-          <Loader2 className="animate-spin text-[#7C3AED] w-12 h-12" />
-        </main>
+      <div style={{ backgroundColor: 'var(--bg-primary)', minHeight: '100vh' }} className="flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-full border-4 mx-auto mb-4 animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+          <p style={{ color: 'var(--text-secondary)' }}>Loading feed...</p>
+        </div>
       </div>
     )
   }
@@ -273,365 +282,521 @@ export default function FeedPage() {
   if (!session) return null
 
   return (
-    <div className="min-h-screen bg-[#0D0B1A] text-white font-body pb-12 relative overflow-x-hidden">
-      
-      {/* Background Dot Grid & Floating Words */}
-      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '30px 30px', opacity: 0.03 }}></div>
-      <div className="absolute top-0 left-0 w-full h-[500px] pointer-events-none overflow-hidden mask-fade-bottom">
-        {FLOATING_WORDS.map((fw, i) => (
-          <div key={i} className="absolute font-heading font-black text-white whitespace-nowrap opacity-[0.04]" 
-               style={{ 
-                 fontSize: `${Math.random() * 40 + 40}px`, 
-                 top: `${Math.random() * 80}%`, 
-                 animation: `driftLeft ${Math.random() * 30 + 30}s linear infinite`,
-                 animationDelay: `-${Math.random() * 20}s` 
-               }}>
-            {fw}
-          </div>
-        ))}
-      </div>
-
-      <style dangerouslySetInnerHTML={{__html: `
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
-        
-        .mask-fade-bottom { mask-image: linear-gradient(to bottom, black 50%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%); }
-        @keyframes driftLeft { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
-        @keyframes pulseGreen { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-        @keyframes heartBounce { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
-        
-        .live-dot { animation: pulseGreen 1.5s infinite; }
-        .heart-bounce { animation: heartBounce 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        
-        .shimmer-btn { position: relative; overflow: hidden; }
-        .shimmer-btn::after { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), transparent); transform: rotate(30deg) translateY(-50%) translateX(-100%); transition: 0s; }
-        .shimmer-btn:hover::after { transform: rotate(30deg) translateY(-50%) translateX(100%); transition: 0.7s; }
-
-        .feed-card { opacity: 0; transform: translateY(30px); transition: opacity 0.6s ease-out, transform 0.6s ease-out; }
-        .visible-card { opacity: 1; transform: translateY(0); }
-        
-        .urdu-text { font-family: 'Noto Nastaliq Urdu', serif; }
-        
-        /* Modal Scroll Lock */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; overflow-y: auto; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 24px; }
-        .modal-content { position: relative; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; margin: auto; border-radius: 20px; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.5) transparent; }
-        .modal-content::-webkit-scrollbar { width: 6px; }
-        .modal-content::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.5); border-radius: 6px; }
-        
-        .modal-enter { animation: modalEnter 0.25s ease-out forwards; }
-        @keyframes modalEnter { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-      `}} />
-
+    <div style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="page-wrapper min-h-screen pb-12">
       <Navbar />
 
-      <main className="max-w-[720px] mx-auto px-4 py-10 relative z-10">
+      <main className="max-w-[800px] mx-auto px-[24px] py-12">
         {/* Page Header */}
-        <div className="flex justify-between items-end mb-6">
+        <div className="flex justify-between items-center mb-8 animate-fade-up">
           <div className="flex flex-col">
             <div className="flex items-center gap-2 mb-2">
-              <div className="relative flex items-center justify-center w-2 h-2">
-                <div className="absolute w-full h-full rounded-full bg-[#22C55E] live-dot"></div>
-                <div className="w-1.5 h-1.5 rounded-full bg-[#22C55E] relative z-10"></div>
-              </div>
-              <span className="text-[#22C55E] text-xs font-bold opacity-80">247 learners online</span>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--semantic-success)', animation: 'pulse 2s infinite' }} />
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.08em' }}>Live</span>
             </div>
-            <h1 className="font-heading text-4xl font-black text-white leading-tight">
-              Community <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] to-[#EC4899]">Feed</span>
+            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '36px', fontWeight: 800, color: 'white', lineHeight: 1.2 }}>
+              Community <span style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-dim))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Feed</span>
             </h1>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="shimmer-btn bg-gradient-to-r from-[#7C3AED] to-[#EC4899] text-white px-6 py-3 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(124,58,237,0.4)] hover:scale-105 active:scale-95 transition-all"
+            className="btn-press"
+            style={{
+              background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-dim))',
+              color: 'white',
+              padding: '12px 24px',
+              borderRadius: '50px',
+              fontWeight: 600,
+              fontSize: '15px',
+              fontFamily: 'var(--font-body)',
+              boxShadow: '0 4px 15px rgba(124,109,250,0.3)',
+              border: 'none',
+              cursor: 'pointer'
+            }}
           >
             Post a Word
           </button>
         </div>
 
-        {/* Filter Tabs & Search */}
-        <div className="mb-6 space-y-4">
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {(['Latest', 'Top Liked', 'Most Discussed', 'Following'] as const).map(tab => {
-              const tabValue = tab.toLowerCase().replace(' ', '') as any;
-              const isActive = filter === tabValue || (filter === 'latest' && tab === 'Latest') || (filter === 'trending' && tab === 'Top Liked') || (filter === 'discussed' && tab === 'Most Discussed');
-              return (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    setFilter(tab === 'Top Liked' ? 'trending' : tab === 'Most Discussed' ? 'discussed' : tab === 'Following' ? 'following' : 'latest')
-                    setPage(1)
-                    setPosts([])
-                  }}
-                  className={`px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all flex-shrink-0 ${
-                    isActive 
-                      ? 'bg-[#7C3AED] text-white shadow-[0_0_15px_rgba(124,58,237,0.4)]' 
-                      : 'border border-[rgba(255,255,255,0.1)] text-[#94A3B8] hover:border-[rgba(255,255,255,0.3)] hover:text-white bg-[rgba(255,255,255,0.02)]'
-                  }`}
-                >
-                  {tab}
-                </button>
-              )
-            })}
-          </div>
-          
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8] w-4 h-4" />
-            <input 
-              type="text" 
-              placeholder="Search words, users..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 pl-11 pr-4 text-white placeholder-[#94A3B8] focus:outline-none focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] transition-all"
-            />
-          </div>
+        {/* Filter Tabs */}
+        <div className="flex gap-3 mb-10 border-b pb-6 animate-fade-up-delay" style={{ borderColor: 'var(--border)' }}>
+          {(['Latest', 'Top Liked', 'Most Discussed'] as const).map(tab => {
+            const tabValue = tab.toLowerCase().replace(' ', '') as any;
+            const isActive = filter === tabValue || (filter === 'latest' && tab === 'Latest') || (filter === 'trending' && tab === 'Top Liked') || (filter === 'discussed' && tab === 'Most Discussed');
+            
+            return (
+              <button
+                key={tab}
+                onClick={() => {
+                  setFilter(tab === 'Top Liked' ? 'trending' : tab === 'Most Discussed' ? 'discussed' : 'latest')
+                  setPage(1)
+                  setPosts([])
+                }}
+                className="btn-press"
+                style={{
+                  padding: '6px 18px',
+                  borderRadius: '20px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  fontFamily: "'DM Sans'",
+                  backgroundColor: isActive ? 'var(--accent)' : 'transparent',
+                  color: isActive ? 'white' : 'var(--text-secondary)',
+                  border: isActive ? '1px solid var(--accent)' : '1px solid var(--border)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {tab}
+              </button>
+            )
+          })}
         </div>
 
         {/* Posts Feed */}
-        {loading && page === 1 ? (
-          <div className="flex flex-col gap-4 mt-6">
-            {[1,2,3].map(i => <div key={i} className="w-full h-48 bg-[rgba(255,255,255,0.02)] rounded-2xl border border-[rgba(255,255,255,0.05)] animate-pulse" />)}
+        {loading ? (
+          <div className="flex flex-col gap-4">
+            {[1,2,3].map(i => <div key={i} className="skeleton w-full h-[200px]" style={{ borderRadius: '20px' }} />)}
           </div>
         ) : posts.length === 0 ? (
-          <div className="text-center py-16 px-4 bg-[rgba(255,255,255,0.02)] rounded-2xl border border-[rgba(255,255,255,0.05)] mt-6">
-            <Inbox className="mx-auto mb-4 text-[#94A3B8] w-12 h-12" />
-            <h3 className="font-heading text-xl font-bold text-white mb-2">No words found</h3>
-            <p className="text-[#94A3B8] mb-6">Be the first to share a fascinating word with the community!</p>
-            <button onClick={() => setShowModal(true)} className="px-6 py-2.5 rounded-full border border-[#7C3AED] text-[#A855F7] font-bold hover:bg-[rgba(124,58,237,0.1)] transition-colors">
-              Share a Word
-            </button>
+          <div className="text-center py-12" style={{ color: 'var(--text-secondary)' }}>
+            No posts yet. Be the first to share a word!
           </div>
         ) : (
-          <div className="flex flex-col gap-4 mt-6">
-            {posts.filter(p => p.word.toLowerCase().includes(searchQuery.toLowerCase()) || (p.user.name && p.user.name.toLowerCase().includes(searchQuery.toLowerCase()))).map((post, idx) => {
-              const diffLevel = post.difficulty || 'INTERMEDIATE';
-              const levelColor = getLevelColor(diffLevel);
-              const isLiked = likedPosts.has(post.id);
-              const isDisliked = dislikedPosts.has(post.id);
-              const isSaved = savedPosts.has(post.id);
+          <div className="flex flex-col gap-4">
+            {posts.map((post, idx) => {
+              const diff = getDifficulty(post.word);
               
               return (
               <div 
                 key={post.id} 
-                ref={cardRef}
-                className="feed-card bg-[rgba(255,255,255,0.03)] border-[0.5px] border-[rgba(255,255,255,0.08)] rounded-2xl p-5 sm:p-6 hover:border-[#7C3AED] hover:scale-[1.005] transition-all duration-300" 
+                className="card-hover" 
+                style={{ 
+                  animation: `fadeUp 0.6s ease forwards`, 
+                  animationDelay: `${idx * 0.1}s`,
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '20px',
+                  padding: '24px',
+                  marginBottom: '12px'
+                }}
               >
-                {/* Author Info Top Row */}
-                <div className="flex justify-between items-center mb-4">
+                {/* Author Info */}
+                <div className="flex justify-between items-center mb-6">
                   <div className="flex gap-3 items-center">
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold font-heading shadow-inner relative"
-                      style={{ background: getAvatarColor(post.user.name || 'A') }}
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '50%',
+                        background: getAvatarColor(post.user.name || 'A'),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: '16px',
+                        fontFamily: 'var(--font-heading)'
+                      }}
                     >
-                      <div className="absolute inset-[-2px] rounded-full border-2 opacity-50" style={{ borderColor: levelColor }}></div>
                       {post.user.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
-                    <div>
-                      <p className="font-bold text-white text-base leading-none mb-1">{post.user.name || 'Anonymous'}</p>
-                      <p className="text-xs text-[#94A3B8] leading-none">{formatTimeAgo(post.createdAt)}</p>
+                    <div className="flex items-center gap-2">
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '15px', fontWeight: 500, color: 'white' }}>
+                        {post.user.name || 'Anonymous'}
+                      </p>
+                      <span style={{ color: 'var(--text-muted)' }}>·</span>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)' }}>{formatTimeAgo(post.createdAt)}</p>
                     </div>
                   </div>
-                  <div 
-                    className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border"
-                    style={{ color: levelColor, borderColor: levelColor, backgroundColor: `${levelColor}15` }}
-                  >
-                    {diffLevel}
+                  <div style={{
+                    background: diff.bg,
+                    color: diff.color,
+                    border: `1.5px solid ${diff.border}`,
+                    padding: '3px 10px',
+                    borderRadius: '20px',
+                    fontSize: '10px',
+                    fontWeight: 500,
+                    letterSpacing: '0.08em',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    {diff.label}
                   </div>
                 </div>
 
-                {/* Word Display */}
-                <div className="mb-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-heading text-[28px] font-extrabold text-white leading-none tracking-tight">
-                      {post.word}
-                    </h3>
-                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-[rgba(124,58,237,0.15)] text-[#A855F7] uppercase tracking-wider border border-[rgba(124,58,237,0.3)]">
-                      Vocabulary
-                    </span>
-                  </div>
-                  
-                  <p className="text-[15px] leading-[1.6] text-gray-200 mb-3">
-                    {post.definition}
-                  </p>
-                  
+                {/* Word and Content */}
+                <div className="flex justify-between items-end mb-4">
+                  <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '28px', fontWeight: 700, color: 'white' }}>
+                    {post.word}
+                  </h3>
                   {post.urduMeaning && (
-                    <p className="text-[15px] text-[#EC4899] urdu-text flex justify-end items-center gap-2 mt-2">
-                      <span className="text-xl">{post.urduMeaning}</span>
-                      <span className="text-xs font-sans opacity-70 mb-1">:اردو</span>
+                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '16px', fontWeight: 300, color: 'var(--brand-bright)', direction: 'rtl', marginLeft: 'auto' }}>
+                      (Urdu: {post.urduMeaning})
                     </p>
                   )}
                 </div>
 
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', lineHeight: 1.6, marginBottom: '16px', color: 'var(--text-secondary)' }}>
+                  {post.definition}
+                </p>
+
                 {post.example && (
-                  <div className="relative bg-[rgba(255,255,255,0.02)] border-l-4 border-[#7C3AED] rounded-r-lg p-3 pl-4 mb-4 group cursor-pointer" onClick={() => playAudio(post.example!)}>
-                    <button className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[rgba(124,58,237,0.2)] text-[#A855F7] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Play fill="currentColor" size={10} className="ml-0.5" />
-                    </button>
-                    <p className="text-[13px] text-[#94A3B8] italic font-medium pr-8 leading-relaxed">
-                      "{post.example}"
-                    </p>
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '0 8px 8px 0',
+                      backgroundColor: 'rgba(124, 109, 250, 0.08)',
+                      borderLeft: '2px solid var(--brand-bright)',
+                      marginBottom: '20px',
+                      fontSize: '13px',
+                      fontStyle: 'italic',
+                      color: 'var(--text-muted)',
+                      fontFamily: 'var(--font-body)'
+                    }}
+                  >
+                    {post.example}
                   </div>
                 )}
 
+                <div style={{ height: '1px', background: 'var(--border)', margin: '16px 0' }} />
+
                 {/* Action Buttons */}
-                <div className="flex items-center gap-2 pt-2 mt-2 border-t border-[rgba(255,255,255,0.05)]">
-                  <button onClick={() => handleLike(post.id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${isLiked ? 'bg-[rgba(239,68,68,0.15)] text-[#EF4444]' : 'hover:bg-[rgba(255,255,255,0.05)] text-[#94A3B8]'}`}>
-                    <Heart size={16} className={isLiked ? 'heart-bounce' : ''} fill={isLiked ? 'currentColor' : 'none'} />
-                    {post.likesCount > 0 && post.likesCount}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleLike(post.id)}
+                    className="btn-press"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 16px',
+                      borderRadius: '20px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      fontFamily: 'var(--font-body)',
+                      backgroundColor: likedPosts.has(post.id) ? 'rgba(255, 77, 109, 0.12)' : 'transparent',
+                      border: likedPosts.has(post.id) ? '1px solid var(--semantic-danger)' : '1px solid var(--brand-border)',
+                      color: likedPosts.has(post.id) ? 'var(--semantic-danger)' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <svg
+                      className={likedPosts.has(post.id) ? 'animate-[heartPop_0.3s_ease]' : ''}
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill={likedPosts.has(post.id) ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                    {post.likesCount}
                   </button>
-                  <button onClick={() => handleDislike(post.id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${isDisliked ? 'bg-[rgba(59,130,246,0.15)] text-[#3B82F6]' : 'hover:bg-[rgba(255,255,255,0.05)] text-[#94A3B8]'}`}>
-                    <ThumbsDown size={16} fill={isDisliked ? 'currentColor' : 'none'} />
-                    {post.dislikesCount > 0 && post.dislikesCount}
+
+                  <button
+                    onClick={() => handleDislike(post.id)}
+                    className="btn-press"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 16px',
+                      borderRadius: '20px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      fontFamily: 'var(--font-body)',
+                      backgroundColor: dislikedPosts.has(post.id) ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                      border: dislikedPosts.has(post.id) ? '1px solid var(--semantic-info)' : '1px solid var(--brand-border)',
+                      color: dislikedPosts.has(post.id) ? 'var(--semantic-info)' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill={dislikedPosts.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+                    </svg>
+                    {post.dislikesCount}
                   </button>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-[rgba(255,255,255,0.05)] text-[#94A3B8] transition-colors">
-                    <MessageCircle size={16} />
-                    0
+
+                  <button
+                    className="btn-press"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 16px',
+                      borderRadius: '20px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      fontFamily: "'DM Sans'",
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Comment
                   </button>
-                  <div className="ml-auto flex items-center gap-1">
-                    <button onClick={() => toggleSave(post.id)} className={`p-2 rounded-full transition-colors ${isSaved ? 'text-[#A855F7]' : 'hover:bg-[rgba(255,255,255,0.05)] text-[#94A3B8]'}`}>
-                      <Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} />
-                    </button>
-                    <button className="p-2 rounded-full hover:bg-[rgba(255,255,255,0.05)] text-[#94A3B8] transition-colors">
-                      <Share2 size={18} />
-                    </button>
-                  </div>
+
+                  <button
+                    onClick={() => toggleSave(post.id)}
+                    className="btn-press"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 16px',
+                      borderRadius: '20px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      fontFamily: "'DM Sans'",
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--border)',
+                      color: savedPosts.has(post.id) ? 'var(--accent)' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      marginLeft: 'auto'
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill={savedPosts.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Save
+                  </button>
                 </div>
               </div>
             )})}
 
             {/* Load More Button */}
             {pagination && pagination.page < pagination.pages && (
-              <div className="flex justify-center mt-4">
-                <button onClick={() => fetchPosts(page + 1, filter)} disabled={loadingMore} className="px-6 py-2.5 rounded-full border border-[#7C3AED] text-[#A855F7] font-bold hover:bg-[rgba(124,58,237,0.1)] transition-colors disabled:opacity-50">
-                  {loadingMore ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Load More'}
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={() => fetchPosts(page + 1, filter)}
+                  disabled={loadingMore}
+                  className="btn-press"
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--border)',
+                    padding: '12px 32px',
+                    borderRadius: '50px',
+                    color: 'white',
+                    fontFamily: "'DM Sans'",
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    opacity: loadingMore ? 0.6 : 1 
+                  }}
+                >
+                  {loadingMore ? 'Loading...' : 'Load More'}
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* ======================================================= */}
-        {/* SHARE A WORD MODAL */}
-        {/* ======================================================= */}
+        {/* Modal */}
         {showModal && (
-          <div className="modal-overlay" onClick={() => setShowModal(false)}>
-            <div className="modal-content bg-[#0D0B1A] border border-[rgba(124,58,237,0.5)] shadow-[0_20px_60px_rgba(0,0,0,0.8)] modal-enter" onClick={e => e.stopPropagation()}>
-              
-              <div className="h-1 w-full bg-gradient-to-r from-[#7C3AED] to-[#EC4899] rounded-t-2xl"></div>
-              
-              <div className="p-6 sm:p-8">
-                <button onClick={() => setShowModal(false)} className="absolute top-5 right-5 text-[#94A3B8] hover:text-white p-2 bg-[rgba(255,255,255,0.05)] rounded-full transition-colors">
-                  <X size={18} />
-                </button>
-                
-                <h2 className="font-heading text-2xl font-bold text-white mb-1">Share a Word</h2>
-                <p className="text-sm text-[#94A3B8] mb-6">Contribute to the community vocabulary</p>
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '24px',
+            }}
+            onClick={() => setShowModal(false)}
+          >
+            <div
+              className="animate-fade-up"
+              style={{
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-hover)',
+                borderRadius: '24px',
+                padding: '32px',
+                maxWidth: '520px',
+                width: '100%',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h2 style={{ fontFamily: "'Bricolage Grotesque'", fontSize: '24px', fontWeight: 600, marginBottom: '24px', color: 'white' }}>
+                Share a Word
+              </h2>
 
-                {error && (
-                  <div className="mb-6 p-3 rounded-xl bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] text-sm text-[#EF4444]">
-                    {error}
-                  </div>
-                )}
+              {error && (
+                <div style={{ marginBottom: '16px', padding: '16px', borderRadius: '12px', backgroundColor: 'rgba(255, 77, 109, 0.1)', border: '1px solid rgba(255, 77, 109, 0.3)', fontSize: '14px', color: 'var(--red)' }}>
+                  {error}
+                </div>
+              )}
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                  <div>
-                    <div className="flex justify-between items-center mb-1.5">
-                      <label className="text-sm font-bold text-gray-300">Word <span className="text-[#EF4444]">*</span></label>
-                      <span className={`text-xs ${formData.word.length > 50 ? 'text-[#EF4444]' : 'text-[#94A3B8]'}`}>{formData.word.length}/50</span>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="e.g. Tenacious"
-                      value={formData.word}
-                      onChange={e => setFormData({ ...formData, word: e.target.value })}
-                      className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 px-4 text-white text-lg font-bold placeholder-[#94A3B8]/50 focus:outline-none focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] transition-all"
-                      required
-                    />
-                  </div>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Word"
+                    value={formData.word}
+                    onChange={e => setFormData({ ...formData, word: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      border: '1px solid var(--border)',
+                      color: 'white',
+                      fontFamily: "'DM Sans'",
+                      fontSize: '15px',
+                    }}
+                    onFocus={e => {
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,109,250,0.15)';
+                      e.currentTarget.style.outline = 'none';
+                    }}
+                    onBlur={e => {
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <div className="flex justify-between items-center mb-1.5">
-                      <label className="text-sm font-bold text-gray-300">Definition <span className="text-[#EF4444]">*</span></label>
-                      <span className={`text-xs ${formData.definition.length > 200 ? 'text-[#EF4444]' : 'text-[#94A3B8]'}`}>{formData.definition.length}/200</span>
-                    </div>
-                    <textarea
-                      placeholder="Clear and concise meaning..."
-                      value={formData.definition}
-                      onChange={e => setFormData({ ...formData, definition: e.target.value })}
-                      className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 px-4 text-white text-base placeholder-[#94A3B8]/50 focus:outline-none focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] transition-all resize-y min-h-[100px]"
-                      required
-                    />
-                  </div>
+                <div>
+                  <textarea
+                    placeholder="Definition"
+                    value={formData.definition}
+                    onChange={e => setFormData({ ...formData, definition: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      border: '1px solid var(--border)',
+                      color: 'white',
+                      fontFamily: "'DM Sans'",
+                      fontSize: '15px',
+                      resize: 'none',
+                    }}
+                    onFocus={e => {
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,109,250,0.15)';
+                      e.currentTarget.style.outline = 'none';
+                    }}
+                    onBlur={e => {
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                    rows={3}
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <label className="text-sm font-bold text-gray-300 flex items-center gap-2 mb-1.5">
-                      Urdu Meaning <span className="text-xs text-[#94A3B8] font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="اردو معنی"
-                      value={formData.urduMeaning}
-                      onChange={e => setFormData({ ...formData, urduMeaning: e.target.value })}
-                      className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 px-4 text-white text-lg placeholder-[#94A3B8]/50 focus:outline-none focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] transition-all urdu-text text-right"
-                      dir="auto"
-                    />
-                  </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Urdu Meaning (Optional)"
+                    value={formData.urduMeaning}
+                    onChange={e => setFormData({ ...formData, urduMeaning: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      border: '1px solid var(--border)',
+                      color: 'white',
+                      fontFamily: "'DM Sans'",
+                      fontSize: '15px',
+                      direction: formData.urduMeaning ? 'rtl' : 'ltr'
+                    }}
+                    onFocus={e => {
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,109,250,0.15)';
+                      e.currentTarget.style.outline = 'none';
+                    }}
+                    onBlur={e => {
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  />
+                </div>
 
-                  <div>
-                    <label className="text-sm font-bold text-gray-300 flex items-center gap-2 mb-1.5">
-                      Example Sentence <span className="text-xs text-[#94A3B8] font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="She was tenacious in pursuing her goals..."
-                      value={formData.example}
-                      onChange={e => setFormData({ ...formData, example: e.target.value })}
-                      className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] rounded-xl py-3 px-4 text-white text-base italic placeholder-[#94A3B8]/50 focus:outline-none focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] transition-all"
-                    />
-                    <p className="text-xs text-[#94A3B8] mt-1.5">Tip: Try to use the word naturally in a full sentence.</p>
-                  </div>
+                <div>
+                  <textarea
+                    placeholder="Example Sentence (Optional)"
+                    value={formData.example}
+                    onChange={e => setFormData({ ...formData, example: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      border: '1px solid var(--border)',
+                      color: 'white',
+                      fontFamily: "'DM Sans'",
+                      fontSize: '15px',
+                      resize: 'none',
+                    }}
+                    onFocus={e => {
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,109,250,0.15)';
+                      e.currentTarget.style.outline = 'none';
+                    }}
+                    onBlur={e => {
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                    rows={2}
+                  />
+                </div>
 
-                  <div>
-                    <label className="text-sm font-bold text-gray-300 mb-2 block">Difficulty Level</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'GRE'] as const).map(lvl => (
-                        <button
-                          key={lvl}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, difficulty: lvl })}
-                          className={`py-2 rounded-lg text-xs font-bold border transition-colors ${
-                            formData.difficulty === lvl 
-                              ? 'bg-[#7C3AED] text-white border-[#7C3AED]' 
-                              : 'bg-transparent text-[#94A3B8] border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.3)]'
-                          }`}
-                        >
-                          {lvl}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 mt-6 pt-6 border-t border-[rgba(255,255,255,0.05)]">
-                    <button
-                      type="button"
-                      onClick={() => setShowModal(false)}
-                      className="flex-1 py-3.5 rounded-xl border border-[rgba(255,255,255,0.1)] text-white font-bold text-sm hover:border-[rgba(239,68,68,0.5)] hover:text-[#EF4444] transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={formLoading || submitSuccess || formData.word.length > 50 || formData.definition.length > 200}
-                      className="flex-[2] shimmer-btn bg-gradient-to-r from-[#7C3AED] to-[#EC4899] py-3.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-70 transition-all"
-                    >
-                      {submitSuccess ? (
-                        <><Check size={18} /> Posted!</>
-                      ) : formLoading ? (
-                        <><Loader2 size={18} className="animate-spin" /> Posting...</>
-                      ) : (
-                        <><Send size={16} /> Post Word</>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
+                <div className="flex gap-3 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModal(false)
+                      setError('')
+                    }}
+                    className="btn-press"
+                    style={{
+                      flex: 1,
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid var(--border)',
+                      padding: '16px',
+                      borderRadius: '12px',
+                      color: 'white',
+                      fontFamily: "'DM Sans'",
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={formLoading}
+                    className="btn-press"
+                    style={{
+                      flex: 2,
+                      background: 'linear-gradient(135deg, #7c6dfa, #e040fb)',
+                      border: 'none',
+                      padding: '16px',
+                      borderRadius: '12px',
+                      color: 'white',
+                      fontFamily: "'DM Sans'",
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      opacity: formLoading ? 0.7 : 1,
+                      height: '52px'
+                    }}
+                  >
+                    {formLoading ? 'Posting...' : 'Post Word'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
